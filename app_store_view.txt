@@ -1,0 +1,216 @@
+from django.shortcuts import render
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import JsonResponse
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.conf import settings
+import feedparser
+from rest_framework import viewsets, permissions
+
+from app_store.serializers import ProductSerializer
+from app_cart.cart import Cart
+from app_store.models import Slider, Brand, Product, SubCategory, Contact
+
+
+# Create your views here.
+def index(request):
+    
+    #Giỏ hàng
+    cart = Cart(request)
+    #Slider
+    sliders = Slider.objects.all()
+    #Brand
+    brands = Brand.objects.all()
+    #Product
+    products = Product.objects.all()
+    #Thiết bị gia đình
+    subcategories_tbgd = SubCategory.objects.filter(category=1).values('id')
+    list_id_subcategories_tbgd = [item['id'] for item in list(subcategories_tbgd)]
+    products_tbgd = Product.objects.filter(subcategory__in=list_id_subcategories_tbgd).order_by('-public_day')[0:10]
+
+    #Đồ dùng nhà bếp
+    subcategories_ddnb = SubCategory.objects.filter(category=2).values('id')
+    list_id_subcategories_ddnb = [item['id'] for item in list(subcategories_ddnb)]
+    products_ddnb = Product.objects.filter(subcategory__in=list_id_subcategories_ddnb).order_by('-public_day')[0:10]
+
+    return render(request, 'index.html', {
+       'sliders': sliders,
+       'brands' : brands,
+       'products' : products,
+       'products_tbgd' : products_tbgd,
+       'products_ddnb' : products_ddnb,
+       'cart':cart,
+    })
+
+def danh_muc(request,id_subcategory):
+   
+   #Giỏ hàng
+   cart = Cart(request)
+   
+   # Đọc danh sách Subcategory
+   subcategories = SubCategory.objects.order_by('name')
+
+   # Lọc sản phẩm theo danh mục
+   if id_subcategory == 0:
+      products = Product.objects.order_by('-public_day')
+      subcategory_name = f'Tất cả sản phẩm ({products.count()})'
+   else:
+      products = Product.objects.filter(subcategory=id_subcategory).order_by('-public_day')
+      subcategory = SubCategory.objects.get(pk=id_subcategory)
+      subcategory_name = f'{subcategory.name} ({products.count()})'
+
+   # Phân trang
+   stories_per_page = 9    #Set bao nhiêu mục hiển thị trên 1 page
+   page = request.GET.get('trang', 1) #mặc định page 1
+   paginator = Paginator(products, stories_per_page) #2
+   try:
+      products_pager = paginator.page(page)
+   except PageNotAnInteger:
+      products_pager = paginator.page(1)
+   except EmptyPage:
+      products_pager = paginator.page(paginator.num_pages)
+
+   return render(request, 'product-list.html', {
+      'subcategories' : subcategories,
+      'products_pager' : products_pager,
+      'products' : products_pager,
+      'subcategory_name' : subcategory_name,
+      'cart' : cart,
+   })
+
+def lien_he(request):
+   #Giỏ hàng
+   cart = Cart(request)
+   
+   chuoi_ket_qua = ""
+
+   if request.POST.get('ho_ten'):
+      # Gán biến:
+      ho_ten = request.POST.get('ho_ten')
+      dien_thoai = request.POST.get('dien_thoai')
+      email = request.POST.get('email')
+      tieu_de = request.POST.get('tieu_de')
+      tin_nhan = request.POST.get('tin_nhan')
+
+      lien_he = Contact(name=ho_ten,
+                        phone_number=dien_thoai,
+                        email=email,
+                        subject=tieu_de,
+                        message=tin_nhan,
+                        )
+      lien_he.save()
+      # Gủi Mail:
+      noi_dung = "Chúng tôi đã nhận được thông tin phản hồi từ bạn như sau:\n"
+      noi_dung += f'{tin_nhan}'
+      sender = settings.EMAIL_HOST_USER
+      ds_nguoi_nhan = [email, sender]
+
+      # Gửi mail không có định dạng HTML
+      # noi_dung = "Chúng tôi đã nhận được thông tin phản hồi từ bạn như sau:\n"
+      # noi_dung += f'{tin_nhan}'
+      # send_mail(tieu_de, noi_dung, sender, ds_nguoi_nhan) 
+
+     
+      # Gửi mail có định dạng HTML
+      noi_dung = '<p>Chúng tôi đã nhận được thông tin phản hồi từ bạn như sau:\n</p>'
+      noi_dung += f'<p><b>{tin_nhan}</b></p>'
+      msg = EmailMultiAlternatives(tieu_de,noi_dung, sender, ds_nguoi_nhan) 
+      msg.attach_alternative(noi_dung, 'text/html')
+      msg.send()
+
+      chuoi_ket_qua = '''
+      <div class="alert alert-success" role="alert">
+         Gửi thông tin thành công!
+      </div>
+      '''
+
+   return render(request, 'contact.html', {
+      'cart' : cart,
+      'chuoi_ket_qua':chuoi_ket_qua,
+    })
+
+def index2(request):
+    #Giỏ hàng
+    cart = Cart(request)
+    #Slider
+    sliders = Slider.objects.all()
+    #Brand
+    brands = Brand.objects.all()
+    #Product
+    products = Product.objects.all()
+    #Thiết bị gia đình
+    subcategories_tbgd = SubCategory.objects.filter(category=1).values('id')
+    list_id_subcategories_tbgd = [item['id'] for item in list(subcategories_tbgd)]
+    products_tbgd = Product.objects.filter(subcategory__in=list_id_subcategories_tbgd).order_by('-public_day')[0:10]
+
+    #Đồ dùng nhà bếp
+    subcategories_ddnb = SubCategory.objects.filter(category=2).values('id')
+    list_id_subcategories_ddnb = [item['id'] for item in list(subcategories_ddnb)]
+    products_ddnb = Product.objects.filter(subcategory__in=list_id_subcategories_ddnb).order_by('-public_day')[0:10]
+    
+    # Tính số lần truy cập
+    so_lan = 0
+    if request.COOKIES.get('so_lan_truy_cap'):
+       so_lan = int(request.COOKIES.get('so_lan_truy_cap'))
+
+    response = render(request, 'index2.html', {
+       'sliders': sliders,
+       'brands' : brands,
+       'products' : products,
+       'products_tbgd' : products_tbgd,
+       'products_ddnb' : products_ddnb,
+       'cart':cart,
+    })
+
+    response.set_cookie('so_lan_truy_cap', so_lan + 1, 5)  #thêm số 5 để cookie tồn tại trong bao nhiêu giây, ở đây là 5 giây, có thể không set
+
+    return response
+
+def san_pham(request, id_product):
+   #Giỏ hàng
+   cart = Cart(request)
+   # Đọc danh sách Subcategory
+   subcategories = SubCategory.objects.order_by('name')
+   # Brand
+   brands = Brand.objects.all()
+   # Product Info
+   product = Product.objects.get(pk=id_product)
+   # Product Relate
+   subcategory = product.subcategory
+   related_products = Product.objects.filter(subcategory=subcategory.pk).exclude(pk=id_product).order_by('-public_day')[0:20]
+   # Tên danh mục (subcategory)
+   subcategory = subcategory
+   # ID Danh mục (Subcategory)
+   subcategory_id = subcategory.pk
+
+   return render(request, 'product-detail.html',{
+      'subcategories' : subcategories,
+      'brands' : brands,
+      'product' : product,
+      'cart':cart,
+      'subcategory':subcategory,
+      'subcategory_id':subcategory_id,
+   })
+
+
+def rss(request):
+   newfeed = feedparser.parse('http://feeds.feedburner.com/bedtimeshortstories/LYCF')
+   entries = newfeed['entries']
+   # print(entries[0].keys())
+   return render(request, 'rss.html',{
+      'entries': entries
+   })
+
+#cách 1
+def products_service(request):
+    products = Product.objects.all()
+    list_products = list(products.values('id','name', 'price', 'image'))
+    return JsonResponse(list_products, safe=False)
+
+#cách 2
+class ProductViewSet(viewsets.ModelViewSet):
+   queryset = Product.objects.order_by('-public_day')
+   serializer_class = ProductSerializer
+   #Cấp quyền cho người dùng
+   permission_classes = [permissions.IsAdminUser] # Quyền Đọc/Ghi/Xóa/Sửa khi đăng nhập
+   permission_classes = [permissions.IsAuthenticatedOrReadOnly] # Chỉ đọc nếu ko đăng nhập
+   

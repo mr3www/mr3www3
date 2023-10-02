@@ -1,0 +1,98 @@
+from django.shortcuts import render, redirect
+from django.contrib.auth.hashers import PBKDF2PasswordHasher, Argon2PasswordHasher, BCryptSHA256PasswordHasher
+
+from app_customer.models import *
+from app_customer.forms import FormContact
+from app_cart.cart import Cart
+
+# Create your views here.
+salt = 'w1o2o3d4y5' # Tạo biến Salt cho mã hóa password
+
+def dang_nhap_dang_ky(request):
+    if 's_khach_hang' in request.session:
+        return redirect('app_store:index')
+
+    #Giỏ hàng
+    cart = Cart(request)
+
+    # +++++++++++++++++ Đăng nhập
+    chuoi_kq_dang_nhap = ''
+    if request.POST.get('btnDangNhap'):
+        # Gán biến
+        hasher = PBKDF2PasswordHasher()  # Tạo biến hasher mã hóa password
+        email = request.POST.get('email').strip()
+        mk = request.POST.get('mat_khau').strip()
+        mat_khau = hasher.encode(mk, 'w1o2o3d4y5')
+
+        # Xác thực thông tin
+        khach_hang = Customer.objects.filter(email=email, password=mat_khau)
+        if khach_hang.count() > 0:
+            dict_khach_hang = khach_hang.values()[0]
+            request.session['s_khachhang'] = dict_khach_hang
+            return redirect('app_store:index')
+        else:
+            chuoi_kq_dang_nhap = '''
+                <div class="alert alert-danger" role="alert">
+                    Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.
+                </div>
+                '''
+
+    # +++++++++++++++++ Đăng ký
+    chuoi_kq_dang_ky = ''
+    if request.POST.get('btnDangKy'):
+        # Gán biến
+        hasher = PBKDF2PasswordHasher() # Tạo biến hasher mã hóa password
+        ho = request.POST.get('ho').strip()
+        ten = request.POST.get('ten').strip()
+        email = request.POST.get('email').strip()
+        mat_khau = request.POST.get('mat_khau').strip()
+        xac_nhan_mat_khau = request.POST.get('xac_nhan_mat_khau').strip()
+        dien_thoai = request.POST.get('dien_thoai').strip()
+        dia_chi = request.POST.get('dia_chi').strip()
+
+        if mat_khau == xac_nhan_mat_khau: 
+            # Lưu vào CSDL
+            Customer.objects.create(first_name=ho,
+                                    last_name=ten,
+                                    email=email,
+                                    password=hasher.encode(mat_khau, salt), #<algorithm>$<iterations>$<salt>$<hash>
+                                    phone=dien_thoai,
+                                    address=dia_chi)
+
+            chuoi_kq_dang_ky = '''
+                <div class="alert alert-success" role="alert">
+                    Đăng ký thành viên thành công.
+                </div>
+                '''
+        else:
+            chuoi_kq_dang_ky = '''
+                <div class="alert alert-danger" role="alert">
+                    Mật khẩu và Xác nhận mật khẩu không khớp.
+                </div>
+                '''
+
+    return render(request, 'login.html', {
+        'chuoi_kq_dang_ky': chuoi_kq_dang_ky,
+        'chuoi_kq_dang_nhap': chuoi_kq_dang_nhap,
+        'cart':cart,
+    })
+
+
+def dang_xuat(request):
+    if 's_khachhang' in request.session:
+        del request.session['s_khachhang']
+        
+    return redirect('app_customer:dang_nhap_dang_ky')
+
+def thong_tin_cua_toi(request):
+    #Giỏ hàng
+    cart = Cart(request)
+
+    if 's_khachhang' not in request.session:
+        return redirect('app_customer:dang_nhap_dang_ky',{
+            'cart': cart,
+        })
+    
+    return render(request, 'my-account.html',{
+        'cart': cart,
+    })

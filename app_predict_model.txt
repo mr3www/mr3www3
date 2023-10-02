@@ -1,0 +1,87 @@
+from django.db import models
+from django.utils import timezone
+
+# Create your models here.
+class League(models.Model):
+    league_name = models.CharField(max_length=200)
+    league_country = models.CharField(max_length=100)
+    country_code = models.CharField(max_length=10)
+    league_logo = models.ImageField(upload_to='Leagues_logo/',default='Leagues_logo/blank-league-icon.png')
+    league_country_flag = models.ImageField(upload_to='Country_flags/',default='Country_flags/38449.webp')
+
+    def __str__(self):
+        return self.league_name
+    
+class HTeam(models.Model):
+    league = models.ForeignKey(League, on_delete=models.PROTECT)
+    team_name = models.CharField(max_length=200)
+    team_logo = models.ImageField(upload_to='Teams_logo/',default='Teams_logo/blank-team-icon.png')
+    team_country = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.team_name
+class ATeam(models.Model):
+    league = models.ForeignKey(League, on_delete=models.PROTECT)
+    team_name = models.CharField(max_length=200)
+    team_logo = models.ImageField(upload_to='Teams_logo/',default='Teams_logo/blank-team-icon.png')
+    team_country = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.team_name
+    
+class Fixture(models.Model):
+    home = models.ForeignKey(HTeam, on_delete=models.PROTECT)
+    away = models.ForeignKey(ATeam, on_delete=models.PROTECT)
+    league = models.ForeignKey(League, on_delete=models.PROTECT)
+    round = models.IntegerField(default=0)
+    home_team = models.CharField(max_length=200)
+    away_team = models.CharField(max_length=200)
+    ko_date = models.DateTimeField(default=timezone.now)
+    location = models.CharField(max_length=200)
+    result_H = models.IntegerField(default=0)
+    result_A = models.IntegerField(default=0)
+    home_image = models.ImageField(upload_to='Teams_logo/',default='Teams_logo/blank-team-icon.png')
+    away_image = models.ImageField(upload_to='Teams_logo/',default='Teams_logo/blank-team-icon.png')
+    created_day = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.home_team
+    
+class Contact(models.Model):
+    name = models.CharField(max_length=264, blank=False)
+    email = models.EmailField(blank=False)
+    phone_number = models.CharField(max_length=20, null=True)
+    subject = models.CharField(max_length=264)
+    message = models.TextField()
+    created_day = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.subject
+    
+class Slider(models.Model):
+    caption = models.CharField(max_length=250)
+    link = models.URLField(null=True)
+    image = models.ImageField(upload_to='media/static_store/sliders', default='media/static_store/sliders/default.png')
+    brand = models.CharField(max_length=30)
+    created_day = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.caption
+
+class User(models.Model):
+    user_name = models.CharField(max_length=250, unique=True)
+    email = models.EmailField(blank=False, unique=True)
+    password = models.CharField(max_length=50, blank=False)
+
+    def __str__(self):
+        return self.user_name
+    
+class Predict(models.Model):
+    user = models.ForeignKey(User, on_delete=models.PROTECT)
+    fixture = models.ForeignKey(Fixture, on_delete=models.PROTECT)
+    predict_choice = models.CharField(max_length=100, blank=False)
+    result = models.CharField(max_length=100)
+    created_day = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.predict_choice

@@ -1,0 +1,105 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.views.decorators.http import require_POST
+from django.core.mail import send_mail
+from django.conf import settings
+from app_cart.cart import Cart
+from app_cart.models import Order, OrderItem
+from app_store.models import Product
+from app_customer.models import Customer
+
+
+# Create your views here.
+def gio_hang(request):
+    cart = Cart(request)
+
+    # Cap nhat gio hang
+    if request.POST.get('btnCapNhatGioHang'):
+        cart_new = {}
+        for c in cart:
+            quantity_new = int(request.POST.get('quantity_2_' + str(c['product'].pk)))
+            if quantity_new != 0 :  # Nếu như số lượng Khác 0 thì mới cập nhật lại số lượng, nếu ko thì sẽ xóa
+                product_cart = {
+                    str(c['product'].pk):{
+                        'quantity': quantity_new,
+                        'price': str(c['product'].price),
+                        'coupon': str(c['coupon'])
+                    }
+                }
+                cart_new.update(product_cart)
+                c['quantity'] = quantity_new # Chức năng này dùng để giữ lại số lượng mới ở trong ô số lượng, nếu ko sẽ trả lại số trước đó.
+            else:
+                cart.remove(c['product']) # Xóa sản phẩm khi số lượng = 0
+        else:
+            request.session['cart'] = cart_new #Cập nhật lại session 'cart' (giỏ hàng)
+
+    return render(request, 'cart.html',{
+        'cart': cart,
+    })
+
+
+
+def thanh_toan(request):
+    cart = Cart(request)
+
+    if len(cart) == 0: # Nếu trang thanh toán ko có sản phẩm thì phải redirect khách hàng về trang giỏ hàng, ko cho phép truy cập trang thanh toán
+        return redirect('app_cart:gio_hang')
+
+    if request.POST.get('btnDatHang'): #Lấy thông tin Khách hàng (Dictionary) khi khách hàng đã đăng nhập
+        khach_hang = Customer.objects.get(pk=request.session.get('s_khachhang')['id'])
+
+        # Lưu thông tin vào bảng Order
+        order = Order()
+        order.customer = khach_hang
+        order.total = cart.get_final_total_price()
+        order.save()
+
+        # Lưu thông tin vào bảng OrderItem
+        list_products = []
+        for c in cart:
+            OrderItem.objects.create(order=order,
+                                     product = c['product'],
+                                     price = c['price'],
+                                     quantity = c['quantity'],
+                                     discount= c['quantity'] * c['price'] * (1 - c['coupon']),
+                                     total_price=c['total_price'])
+            list_products.append(c['product'].name)
+
+        # Tạo chức năng gửi Mail
+        subject = f'Đặt hàng thành công #{order.pk}'
+        content = ""
+        for product in list_products:
+            content += f'- {product}\n'
+        sender = settings.EMAIL_HOST_USER
+        receivers = [khach_hang.email, sender]
+        send_mail(subject, content, sender, receivers) 
+        
+        # Xóa giỏ hàng (Clear Session s_khachhang) khi mà đã lưu thông tin thành công (Mua hàng thành công)
+        cart.clear()
+        cart = Cart(request) # Gọi lại để load lại con số mới là 0, khi giỏ hàng đã xóa , nếu ko con số vẫn sẽ hiển thị là con số giỏ hàng cũ trước khi xóa.
+
+        # Hiển thị trang đặt hàng thành công
+        return render(request, 'result.html',{
+            'cart': cart,
+        })
+
+    return render(request, 'checkout.html',{
+        'cart': cart,
+    })
+
+
+
+@require_POST   #phải thực hiện bằng POST mua ngay mới được phép thực hiện
+def mua_ngay(request, product_id):
+    cart = Cart(request)
+    product = get_object_or_404(Product, id=product_id)
+    if request.POST.get('quantity'):
+        quantity = int(request.POST.get('quantity'))
+        cart.add(product, quantity)
+    return redirect('app_cart:gio_hang')
+
+@require_POST   #phải thực hiện bằng POST xóa mới được phép thực hiện xóa
+def xoa_san_pham(request, product_id):
+    cart = Cart(request)
+    product = get_object_or_404(Product, id=product_id)
+    cart.remove(product)
+    return redirect('app_cart:gio_hang')
