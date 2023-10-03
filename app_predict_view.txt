@@ -1,0 +1,33 @@
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.conf import settings
+from datetime import date, timedelta, datetime
+import feedparser
+from rest_framework import viewsets, permissions
+
+from app_predict.models import *
+
+# Create your views here.
+def index(request):
+
+    # League List:
+    leagues = League.objects.all()
+
+    # Fixture List:
+    fixtures = Fixture.objects.filter(league_id=1)
+
+    # Show matches by Current week:
+    today = datetime.today()
+    week_start = today - timedelta(today.weekday())
+    week_end = today + timedelta(7 - today.weekday()-1)
+    current_week_matches = Fixture.objects.filter(ko_date__range=[week_start, week_end])
+
+
+
+
+    return render(request, 'index.html',{
+        'leagues' : leagues,  #Get League List Name
+        'current_week_matches': current_week_matches, #Get Current Week Matches
+        'fixtures' : fixtures,
+    })
